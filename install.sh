@@ -6,7 +6,7 @@ KEY="${1:-}"
 [[ $EUID -eq 0 ]] || { echo "[ERROR] root requerido"; exit 1; }
 
 REPO="anonymousmasterpro1234-dot/JackSneider"
-URL="https://github.com/$REPO/releases/latest/download/movivip-pro.tar.gz"
+URL="https://github.com/$REPO/raw/main/movivip-pro.tar.gz"
 TMP="/tmp/movivip-pro.tar.gz"
 
 echo "[*] Descargando instalador..."
