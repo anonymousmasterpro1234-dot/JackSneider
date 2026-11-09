@@ -3,6 +3,10 @@
 set -euo pipefail
 KEY="${1:-}"
 [[ -n "$KEY" ]] || { echo "[ERROR] Falta la KEY: bash install.sh TU_KEY"; exit 1; }
+if [[ "$KEY" == "TU_KEY" ]]; then
+    echo "[ERROR] No uses TU_KEY, pon tu clave real de MoviVIP."
+    exit 1
+fi
 [[ $EUID -eq 0 ]] || { echo "[ERROR] root requerido"; exit 1; }
 
 REPO="anonymousmasterpro1234-dot/JackSneider"
