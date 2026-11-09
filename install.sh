@@ -18,4 +18,4 @@ cd /tmp && rm -rf movivip-pro && tar -xzf "$TMP"
 echo "[*] Ejecutando deploy..."
 cd /tmp/movivip-pro
 export MV_KEY="$KEY"
-bash deploy.sh
+bash deploy.sh < /dev/tty
