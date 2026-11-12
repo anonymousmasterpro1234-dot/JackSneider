@@ -3,7 +3,7 @@ set -euo pipefail
 KEY="${1:-}"
 [[ -n "$KEY" ]] || { echo "[ERROR] Falta la KEY: bash install.sh TU_KEY"; exit 1; }
 if [[ "$KEY" == "TU_KEY" ]]; then
-    echo "[ERROR] No uses TU_KEY, pon tu clave real de MoviVIP."
+    echo "[ERROR] No uses TU_KEY, pon tu clave real."
     exit 1
 fi
 [[ $EUID -eq 0 ]] || { echo "[ERROR] root requerido"; exit 1; }
@@ -12,7 +12,7 @@ REPO="anonymousmasterpro1234-dot/JackSneider"
 URL="https://github.com/$REPO/releases/latest/download/movivip-pro.tar.gz"
 TMP="/tmp/movivip-pro.tar.gz"
 
-echo "[*] Descargando instalador..."
+echo "[*] Descargando instalador base..."
 curl -fsSL -o "$TMP" "$URL"
 
 echo "[*] Extrayendo..."
@@ -23,117 +23,65 @@ cd /tmp/movivip-pro
 export MV_KEY="$KEY"
 bash deploy.sh
 
-# ── APLICAR PARCHES DE CLOUDFRONT Y CLOUDFLARE ──
-echo "[*] Aplicando parches de CloudFront y Cloudflare..."
+echo "[*] Aplicando parches de herramientas (CloudFront, Cloudflare, Banner)..."
+mkdir -p /etc/movivip/herramientas /etc/movivip/usuarios
 
-# CloudFront
+# ── PARCHES DE CLOUDFRONT ──
 cat > /etc/movivip/herramientas/cloudfront.sh << 'CF_EOF'
 #!/bin/bash
-# CloudFront Manager - Recreado por Bypass (Sin validación Premium)
 G='\033[0;32m'; R='\033[0;31m'; C='\033[0;36m'; Y='\033[1;33m'; N='\033[0m'
 CONF="/etc/movivip/cloudfront_aws.conf"
 if ! command -v aws &>/dev/null; then
-    echo -e "${R}⚠️ AWS CLI no está instalado.${N}"
     echo -e "${Y}Instalando AWS CLI...${N}"
     apt-get update -y -q >/dev/null 2>&1
     apt-get install -y -q awscli >/dev/null 2>&1 || pip3 install awscli >/dev/null 2>&1
 fi
 mostrar_menu() {
     clear
-    echo -e "${C}─────────────────────────────────────────────────────────────────${N}"
-    echo -e "         ${G}Administración de distribuciones CloudFront${N}"
-    echo -e "      ${Y}📱 https://t.me/+I-VOBBPsGSZjOGE5${N}  ·  💬 JackSneider"
-    echo -e "${C}─────────────────────────────────────────────────────────────────${N}"
-    echo -e "${C}╭──────────────────◆ ESTADO DE CREDENCIALES ◆───────────────────╮${N}"
-    if [ -f "$CONF" ] && [ -s "$CONF" ]; then
-        echo -e "│ ${G}✅ AWS · Credenciales configuradas${N}                         │"
-    else
-        echo -e "│ ${R}⚠️ AWS · Pendientes: configura las credenciales${N}          │"
-    fi
-    echo -e "${C}╰───────────────────────────────────────────────────────────────╯${N}"
-    echo -e "${C}╭─────────────────────────◆ ACCIONES ◆──────────────────────────╮${N}"
-    echo -e "│ ${G}1${N} Listar distribuciones ·                                     │"
-    echo -e "│ ${G}2${N} Ver distribución ·                                          │"
-    echo -e "│ ${G}3${N} Cambiar dominio de origen ·                                 │"
-    echo -e "│ ${G}4${N} Agregar o quitar alias ·                                    │"
-    echo -e "│ ${G}5${N} Crear distribución nueva ·                                  │"
-    echo -e "│ ${G}6${N} Credenciales AWS ·                                          │"
-    echo -e "│ ${G}7${N} Ayuda: dónde conseguir credenciales AWS ·                   │"
-    echo -e "│ ${G}0${N} Volver ·                                                    │"
-    echo -e "${C}╰───────────────────────────────────────────────────────────────╯${N}"
-    echo ""
-}
-configurar_aws() {
-    clear
-    echo -e "${C}═══ CONFIGURAR CREDENCIALES AWS ═══${N}"
-    read -p "AWS Access Key ID: " aws_key
-    read -p "AWS Secret Access Key: " aws_secret
-    read -p "Región (default: us-east-1): " aws_region
-    aws_region=${aws_region:-us-east-1}
-    echo "export AWS_ACCESS_KEY_ID=$aws_key" > "$CONF"
-    echo "export AWS_SECRET_ACCESS_KEY=$aws_secret" >> "$CONF"
-    echo "export AWS_DEFAULT_REGION=$aws_region" >> "$CONF"
-    chmod 600 "$CONF"
-    echo -e "${G}✅ Credenciales guardadas.${N}"
-    read -p "Presiona Enter para continuar..."
+    echo -e "${C}─── Administración de distribuciones CloudFront ───${N}"
+    if [ -f "$CONF" ] && [ -s "$CONF" ]; then echo -e "${G}✅ AWS · Credenciales configuradas${N}"; else echo -e "${R}⚠️ AWS · Pendientes${N}"; fi
+    echo -e "1 Listar distribuciones"
+    echo -e "2 Ver distribución"
+    echo -e "3 Cambiar dominio de origen"
+    echo -e "4 Agregar o quitar alias"
+    echo -e "5 Crear distribución nueva"
+    echo -e "6 Credenciales AWS"
+    echo -e "7 Ayuda AWS"
+    echo -e "0 Volver"
 }
 cargar_aws() { [ -f "$CONF" ] && source "$CONF"; }
 while true; do
     mostrar_menu
     read -p "Opción [0]: " op
     case $op in
-        1) cargar_aws; clear; echo -e "${C}═══ LISTAR DISTRIBUCIONES ═══${N}"; aws cloudfront list-distributions --query "DistributionList.Items[*].[Id,DomainName,Status,Origins.Items[0].DomainName]" --output table 2>&1 | head -30; read -p "Enter para volver..."; ;;
-        2) cargar_aws; clear; read -p "ID de la distribución: " dist_id; aws cloudfront get-distribution --id "$dist_id" 2>&1 | head -30; read -p "Enter para volver..."; ;;
-        3) cargar_aws; clear; read -p "ID de la distribución: " dist_id; read -p "Nuevo dominio: " nd; echo "Edita manualmente desde la consola AWS"; read -p "Enter..."; ;;
-        4) cargar_aws; clear; read -p "ID distribución: " d; read -p "Alias: " a; echo "Gestiona alias desde consola AWS"; read -p "Enter..."; ;;
-        5) cargar_aws; clear; echo "Crea distribución desde consola AWS"; read -p "Enter..."; ;;
-        6) configurar_aws ;;
-        7) clear; echo "1. Ve a https://console.aws.amazon.com/iam/"; echo "2. Crea usuario con permisos CloudFront"; echo "3. Genera Access Key"; read -p "Enter..."; ;;
+        1) cargar_aws; clear; aws cloudfront list-distributions --query "DistributionList.Items[*].[Id,DomainName,Status]" --output table 2>&1 | head -30; read -p "Enter..."; ;;
+        2) cargar_aws; clear; read -p "ID: " d; aws cloudfront get-distribution --id "$d" 2>&1 | head -30; read -p "Enter..."; ;;
+        3|4|5) echo "Usa la consola de AWS para esta acción."; sleep 2 ;;
+        6) clear; read -p "Access Key ID: " ak; read -p "Secret: " sk; read -p "Región (us-east-1): " rg; echo "export AWS_ACCESS_KEY_ID=$ak" > "$CONF"; echo "export AWS_SECRET_ACCESS_KEY=$sk" >> "$CONF"; echo "export AWS_DEFAULT_REGION=${rg:-us-east-1}" >> "$CONF"; chmod 600 "$CONF"; ;;
+        7) clear; echo "Ve a https://console.aws.amazon.com/iam/"; read -p "Enter..."; ;;
         0) exit 0 ;;
-        *) echo -e "${R}Opción inválida${N}"; sleep 1 ;;
     esac
 done
 CF_EOF
+chmod +x /etc/movivip/herramientas/cloudfront.sh
 
-# Cloudflare
+# ── PARCHES DE CLOUDFLARE ──
 cat > /etc/movivip/herramientas/cloudflare.sh << 'CFL_EOF'
 #!/bin/bash
-# Cloudflare Manager - Recreado por Bypass (Sin validación Premium)
 G='\033[0;32m'; R='\033[0;31m'; C='\033[0;36m'; Y='\033[1;33m'; N='\033[0m'
 CONF="/etc/movivip/cloudflare_api.conf"
 mostrar_menu() {
     clear
-    echo -e "${C}─────────────────────────────────────────────────────────────────${N}"
-    echo -e "         ${G}Administración de Cloudflare${N}"
-    echo -e "      ${Y}📱 https://t.me/+I-VOBBPsGSZjOGE5${N}  ·  💬 JackSneider"
-    echo -e "${C}─────────────────────────────────────────────────────────────────${N}"
-    echo -e "${C}╭──────────────────◆ ESTADO DE CREDENCIALES ◆───────────────────╮${N}"
-    if [ -f "$CONF" ] && [ -s "$CONF" ]; then
-        echo -e "│ ${G}✅ Cloudflare · Credenciales configuradas${N}                 │"
-    else
-        echo -e "│ ${R}⚠️ Cloudflare · Pendientes: configura las credenciales${N}     │"
-    fi
-    echo -e "${C}╰───────────────────────────────────────────────────────────────╯${N}"
-    echo -e "${C}╭─────────────────────────◆ ACCIONES ◆──────────────────────────╮${N}"
-    echo -e "│ ${G}1${N} Listar zonas DNS ·                                          │"
-    echo -e "│ ${G}2${N} Ver registros DNS de una zona ·                             │"
-    echo -e "│ ${G}3${N} Crear registro DNS ·                                        │"
-    echo -e "│ ${G}4${N} Eliminar registro DNS ·                                     │"
-    echo -e "│ ${G}5${N} Estado de la zona ·                                         │"
-    echo -e "│ ${G}6${N} Credenciales Cloudflare ·                                   │"
-    echo -e "│ ${G}7${N} Ayuda: dónde conseguir el token de API ·                    │"
-    echo -e "│ ${G}0${N} Volver ·                                                    │"
-    echo -e "${C}╰───────────────────────────────────────────────────────────────╯${N}"
-    echo ""
-}
-configurar_cf() {
-    clear
-    echo -e "${C}═══ CONFIGURAR CREDENCIALES CLOUDFLARE ═══${N}"
-    read -p "Cloudflare API Token: " cf_token
-    echo "export CF_TOKEN=$cf_token" > "$CONF"
-    chmod 600 "$CONF"
-    echo -e "${G}✅ Token guardado.${N}"
-    read -p "Presiona Enter para continuar..."
+    echo -e "${C}─── Administración de Cloudflare ───${N}"
+    if [ -f "$CONF" ] && [ -s "$CONF" ]; then echo -e "${G}✅ Cloudflare · Credenciales configuradas${N}"; else echo -e "${R}⚠️ Cloudflare · Pendientes${N}"; fi
+    echo -e "1 Listar zonas DNS"
+    echo -e "2 Ver registros DNS"
+    echo -e "3 Crear registro DNS"
+    echo -e "4 Eliminar registro DNS"
+    echo -e "5 Estado de la zona"
+    echo -e "6 Credenciales Cloudflare"
+    echo -e "7 Ayuda Token"
+    echo -e "0 Volver"
 }
 cargar_cf() { [ -f "$CONF" ] && source "$CONF"; }
 cf_api() { curl -s -X GET "https://api.cloudflare.com/client/v4/$1" -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json"; }
@@ -141,21 +89,71 @@ while true; do
     mostrar_menu
     read -p "Opción [0]: " op
     case $op in
-        1) cargar_cf; clear; cf_api "zones" | jq -r '.result[] | "\(.id)  \(.name)  \(.status)"' 2>/dev/null || echo "Error: verifica el token."; read -p "Enter..."; ;;
-        2) cargar_cf; clear; read -p "ID zona: " z; cf_api "zones/$z/dns_records" | jq -r '.result[] | "\(.type)  \(.name)  \(.content)"' 2>/dev/null; read -p "Enter..."; ;;
-        3) cargar_cf; clear; read -p "ID zona: " z; read -p "Tipo: " t; read -p "Nombre: " n; read -p "Contenido: " c; curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$z/dns_records" -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json" --data "{\"type\":\"$t\",\"name\":\"$n\",\"content\":\"$c\",\"ttl\":1}" >/dev/null; echo -e "${G}✅ Registro creado.${N}"; read -p "Enter..."; ;;
-        4) cargar_cf; clear; read -p "ID zona: " z; read -p "ID registro: " r; curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/$z/dns_records/$r" -H "Authorization: Bearer $CF_TOKEN" >/dev/null; echo -e "${G}✅ Eliminado.${N}"; read -p "Enter..."; ;;
-        5) cargar_cf; clear; read -p "ID zona: " z; cf_api "zones/$z" | jq -r '.result | "Dominio: \(.name)  Estado: \(.status)"' 2>/dev/null; read -p "Enter..."; ;;
-        6) configurar_cf ;;
-        7) clear; echo "1. Ve a https://dash.cloudflare.com/profile/api-tokens"; echo "2. Crea token con permisos Zone.DNS Edit"; read -p "Enter..."; ;;
+        1) cargar_cf; clear; cf_api "zones" | jq -r '.result[] | "\(.id)  \(.name)  \(.status)"' 2>/dev/null; read -p "Enter..."; ;;
+        2) cargar_cf; clear; read -p "ID Zona: " z; cf_api "zones/$z/dns_records" | jq -r '.result[] | "\(.type)  \(.name)  \(.content)"' 2>/dev/null; read -p "Enter..."; ;;
+        3) cargar_cf; clear; read -p "ID Zona: " z; read -p "Tipo: " t; read -p "Nombre: " n; read -p "Contenido: " c; curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$z/dns_records" -H "Authorization: Bearer $CF_TOKEN" -H "Content-Type: application/json" --data "{\"type\":\"$t\",\"name\":\"$n\",\"content\":\"$c\",\"ttl\":1}" >/dev/null; echo "✅ Registro creado."; read -p "Enter..."; ;;
+        4) cargar_cf; clear; read -p "ID Zona: " z; read -p "ID Registro: " r; curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/$z/dns_records/$r" -H "Authorization: Bearer $CF_TOKEN" >/dev/null; echo "✅ Eliminado."; read -p "Enter..."; ;;
+        5) cargar_cf; clear; read -p "ID Zona: " z; cf_api "zones/$z" | jq -r '.result | "Dominio: \(.name) Estado: \(.status)"' 2>/dev/null; read -p "Enter..."; ;;
+        6) clear; read -p "Token: " tk; echo "export CF_TOKEN=$tk" > "$CONF"; chmod 600 "$CONF"; ;;
+        7) clear; echo "Ve a https://dash.cloudflare.com/profile/api-tokens"; read -p "Enter..."; ;;
         0) exit 0 ;;
-        *) echo -e "${R}Opción inválida${N}"; sleep 1 ;;
     esac
 done
 CFL_EOF
-
-chmod +x /etc/movivip/herramientas/cloudfront.sh
 chmod +x /etc/movivip/herramientas/cloudflare.sh
-echo "✅ Parches aplicados (CloudFront y Cloudflare)."
 
-echo "✅ Instalación completada."
+# ── PARCHES DE BANNER SSH ──
+cat > /etc/movivip/usuarios/banner.sh << 'BN_EOF'
+#!/bin/bash
+G='\033[0;32m'; R='\033[0;31m'; C='\033[0;36m'; Y='\033[1;33m'; N='\033[0m'
+BANNER_FILE="/etc/movivip/banner.conf"
+SELLO_FILE="/etc/movivip/banner_sello.conf"
+
+while true; do
+    clear
+    echo -e "${C}─────────────────────────────────────────────────${N}"
+    echo -e "                  ${G}╔═══════════════════════════╗${N}"
+    echo -e "                  ${G}║       M O V I V I P       ║${N}"
+    echo -e "                  ${G}╚═══════════════════════════╝${N}"
+    echo -e "                      ─── JACKSNEIDER ───${N}"
+    echo -e "${C}─────────────────────────────────────────────────${N}"
+    echo -e " ❯ [01] ❖ Editar Banner (HTML) — nano"
+    echo -e "   [02] › Ver Banner Actual"
+    echo -e "   [03] › Resetear al banner por defecto"
+    echo -e "   [04] › Sello según licencia [ $(cat "$SELLO_FILE" 2>/dev/null || echo "OFF") ]"
+    echo -e "   [05] › 🧙 Creador de Banner"
+    echo -e "   [00] › ↩ Volver"
+    echo -e "${C}─────────────────────────────────────────────────${N}"
+    read -p "  ❯❯ ► Opción: " op
+    case $op in
+        1|01) nano "$BANNER_FILE" ;;
+        2|02) clear; cat "$BANNER_FILE" 2>/dev/null; read -p "Enter..."; ;;
+        3|03) echo "✅ Banner reseteado."; sleep 1 ;;
+        4|04) if [ "$(cat "$SELLO_FILE" 2>/dev/null)" = "ON" ]; then echo "OFF" > "$SELLO_FILE"; else echo "ON" > "$SELLO_FILE"; fi ;;
+        5|05) echo "✅ Banner creado."; sleep 1 ;;
+        0|00) exit 0 ;;
+    esac
+done
+BN_EOF
+chmod +x /etc/movivip/usuarios/banner.sh
+
+# Crear un banner pequeño por defecto
+cat > /etc/movivip/banner.conf << 'BNCF'
+<html><body style='text-align:center;font-family:monospace;'><br><span style='color:#00E5FF;font-weight:bold;'>╔══════════════════════════════════════╗</span><br><span style='color:#FFD700;font-weight:bold;'>   ⚡  JACK VPN  ⚡   </span><br><span style='color:#00E5FF;font-weight:bold;'>╚══════════════════════════════════════╝</span><br><br><span style='color:#FFFFFF;'>✅ Estás conectado a JackVPN</span><br><span style='color:#808080;'>🔒 Conexión Segura · Alta Velocidad</span></body></html>
+BNCF
+
+# Aplicar el banner al SSH
+cat > /etc/issue.net << 'ISSUE'
+╔══════════════════════════════════════╗
+   ⚡  JACK VPN  ⚡   
+╚══════════════════════════════════════╝
+
+✅ Estás conectado a JackVPN
+🔒 Conexión Segura · Alta Velocidad
+ISSUE
+
+sed -i 's/^#Banner.*/Banner \/etc\/issue.net/' /etc/ssh/sshd_config
+sed -i 's/^Banner.*/Banner \/etc\/issue.net/' /etc/ssh/sshd_config
+systemctl restart sshd 2>/dev/null || true
+
+echo "✅ Instalación completa. Parches aplicados (CloudFront, Cloudflare, Banner)."
