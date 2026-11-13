@@ -157,3 +157,34 @@ sed -i 's/^Banner.*/Banner \/etc\/issue.net/' /etc/ssh/sshd_config
 systemctl restart sshd 2>/dev/null || true
 
 echo "✅ Instalación completa. Parches aplicados (CloudFront, Cloudflare, Banner)."
+
+# ── PARCHE: UDP CUSTOM + ZIVPN CONVIVENCIA ──
+echo -e "${C_GREEN}[*] Aplicando parches de convivencia UDP Custom + ZiVPN...${C_NC}"
+
+# 1. Parchear el menú de Golbert para que no detenga los servicios
+if [ -f "/usr/bin/menu" ]; then
+    cp /usr/bin/menu /usr/bin/menu.bak
+    # Comentar las líneas que detienen udp-custom y zivpn
+    sed -i 's/\[ "\$activo" != "udp-custom" \] && { systemctl stop udp-custom 2>\/dev\/null; pkill -9 -f "udp-custom" 2>\/dev\/null; }/# [BYPASS] udp-custom no se detiene/' /usr/bin/menu
+    sed -i 's/\[ "\$activo" != "zivpn" \] && { systemctl stop zivpn 2>\/dev\/null; pkill -9 -x "zivpn" 2>\/dev\/null; }/# [BYPASS] zivpn no se detiene/' /usr/bin/menu
+    # Comentar la línea que mata ambos procesos
+    sed -i 's/pkill -9 -f "hcr-server|BHTTP.py|proxy.py|badvpn-udpgw|udp-custom|zivpn|dnstt-server|psiphond"/# [BYPASS] No matar udp-custom ni zivpn/' /usr/bin/menu
+fi
+
+# 2. Parchear el menú en /etc/vps-manager/core/ si existe
+if [ -f "/etc/vps-manager/core/menu.sh" ]; then
+    cp /etc/vps-manager/core/menu.sh /etc/vps-manager/core/menu.sh.bak
+    sed -i 's/\[ "\$activo" != "udp-custom" \] && { systemctl stop udp-custom 2>\/dev\/null; pkill -9 -f "udp-custom" 2>\/dev\/null; }/# [BYPASS] udp-custom no se detiene/' /etc/vps-manager/core/menu.sh
+    sed -i 's/\[ "\$activo" != "zivpn" \] && { systemctl stop zivpn 2>\/dev\/null; pkill -9 -x "zivpn" 2>\/dev\/null; }/# [BYPASS] zivpn no se detiene/' /etc/vps-manager/core/menu.sh
+    sed -i 's/pkill -9 -f "hcr-server|BHTTP.py|proxy.py|badvpn-udpgw|udp-custom|zivpn|dnstt-server|psiphond"/# [BYPASS] No matar udp-custom ni zivpn/' /etc/vps-manager/core/menu.sh
+fi
+
+# 3. Modificar el servicio de ZiVPN para que no se detenga
+if [ -f "/etc/systemd/system/zivpn.service" ]; then
+    cp /etc/systemd/system/zivpn.service /etc/systemd/system/zivpn.service.bak
+    sed -i 's/Restart=always/Restart=no/' /etc/systemd/system/zivpn.service
+    sed -i 's/After=network.target/After=network.target udp-custom.service/' /etc/systemd/system/zivpn.service
+    systemctl daemon-reload
+fi
+
+echo -e "${C_GREEN}[✓] Parches de convivencia UDP Custom + ZiVPN aplicados.${C_NC}"
